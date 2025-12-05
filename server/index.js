@@ -31,8 +31,15 @@ mongoose
   .then(() => console.log("MongoDB connected"))
   .catch((err) => console.error("Mongo error:", err.message))
 
-// Store canvas state per room (in-memory for now)
+// Store canvas state and online users per room
 const roomCanvasState = new Map()
+const roomUsers = new Map() // roomCode -> Map(socketId -> { userName, color })
+
+// Generate random color for user cursor
+const getRandomColor = () => {
+  const colors = ["#EA580C", "#8B5CF6", "#16A34A", "#2563EB", "#DC2626", "#D946EF", "#0891B2"]
+  return colors[Math.floor(Math.random() * colors.length)]
+}
 
 io.on("connection", (socket) => {
   console.log("User connected:", socket.id)
@@ -42,6 +49,18 @@ io.on("connection", (socket) => {
     socket.join(roomCode)
     socket.roomCode = roomCode
     socket.userName = userName
+    socket.userColor = getRandomColor()
+
+    // Add user to room's user list
+    if (!roomUsers.has(roomCode)) {
+      roomUsers.set(roomCode, new Map())
+    }
+    roomUsers.get(roomCode).set(socket.id, {
+      id: socket.id,
+      userName,
+      color: socket.userColor
+    })
+
     console.log(`${userName} joined room ${roomCode}`)
 
     // Send current canvas state to new joiner
@@ -50,16 +69,44 @@ io.on("connection", (socket) => {
       socket.emit("canvas-state", canvasState)
     }
 
-    // Notify others
-    socket.to(roomCode).emit("user-joined", { userName })
+    // Send current online users to new joiner
+    const users = Array.from(roomUsers.get(roomCode).values())
+    socket.emit("users-in-room", users)
+
+    // Notify others about new user
+    socket.to(roomCode).emit("user-joined", {
+      id: socket.id,
+      userName,
+      color: socket.userColor
+    })
   })
 
-  // Drawing event - broadcast to room
+  // Cursor movement - throttled on client, broadcast to room
+  socket.on("cursor-move", ({ x, y }) => {
+    if (socket.roomCode) {
+      socket.to(socket.roomCode).emit("cursor-move", {
+        id: socket.id,
+        userName: socket.userName,
+        color: socket.userColor,
+        x,
+        y
+      })
+    }
+  })
+
+  // Cursor leaves canvas
+  socket.on("cursor-leave", () => {
+    if (socket.roomCode) {
+      socket.to(socket.roomCode).emit("cursor-leave", { id: socket.id })
+    }
+  })
+
+  // Drawing event
   socket.on("draw", (data) => {
     socket.to(socket.roomCode).emit("draw", data)
   })
 
-  // Canvas state update (for late joiners)
+  // Canvas state update
   socket.on("canvas-state-update", (dataUrl) => {
     if (socket.roomCode) {
       roomCanvasState.set(socket.roomCode, dataUrl)
@@ -74,7 +121,7 @@ io.on("connection", (socket) => {
     }
   })
 
-  // Undo/Redo sync
+  // Undo
   socket.on("undo", (dataUrl) => {
     if (socket.roomCode) {
       roomCanvasState.set(socket.roomCode, dataUrl)
@@ -82,9 +129,21 @@ io.on("connection", (socket) => {
     }
   })
 
+  // Disconnect
   socket.on("disconnect", () => {
     if (socket.roomCode) {
-      socket.to(socket.roomCode).emit("user-left", { userName: socket.userName })
+      // Remove user from room
+      if (roomUsers.has(socket.roomCode)) {
+        roomUsers.get(socket.roomCode).delete(socket.id)
+        if (roomUsers.get(socket.roomCode).size === 0) {
+          roomUsers.delete(socket.roomCode)
+        }
+      }
+
+      socket.to(socket.roomCode).emit("user-left", {
+        id: socket.id,
+        userName: socket.userName
+      })
     }
     console.log("User disconnected:", socket.id)
   })
@@ -93,4 +152,3 @@ io.on("connection", (socket) => {
 httpServer.listen(PORT, () => {
   console.log(`Server listening on http://localhost:${PORT}`)
 })
- 

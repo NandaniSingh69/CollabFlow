@@ -2,6 +2,7 @@ import { useRef, useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Undo2, Redo2, Trash2 } from "lucide-react"
 import { useSocket } from "@/context/SocketContext"
+import Cursor from "./Cursor"
 
 export default function Whiteboard({ roomCode, userName }) {
   const socket = useSocket()
@@ -16,8 +17,12 @@ export default function Whiteboard({ roomCode, userName }) {
   const [history, setHistory] = useState([])
   const [historyIndex, setHistoryIndex] = useState(-1)
   
+  // Remote cursors state
+  const [remoteCursors, setRemoteCursors] = useState({})
+  
   const lastPoint = useRef(null)
   const animationRef = useRef(null)
+  const throttleRef = useRef(null)
 
   const colors = ["#292524", "#EA580C", "#8B5CF6", "#16A34A", "#DC2626", "#2563EB"]
   const sizes = [2, 4, 6, 10]
@@ -57,7 +62,6 @@ export default function Whiteboard({ roomCode, userName }) {
   useEffect(() => {
     if (!socket || !context) return
 
-    // Join room
     socket.emit("join-room", { roomCode, userName })
 
     // Receive drawing from others
@@ -65,7 +69,7 @@ export default function Whiteboard({ roomCode, userName }) {
       drawLine(data.x0, data.y0, data.x1, data.y1, data.color, data.lineWidth)
     })
 
-    // Receive full canvas state (for late joiners)
+    // Receive canvas state
     socket.on("canvas-state", (dataUrl) => {
       if (dataUrl) {
         const img = new Image()
@@ -77,21 +81,47 @@ export default function Whiteboard({ roomCode, userName }) {
       }
     })
 
-    // Clear canvas from others
+    // Clear canvas
     socket.on("clear-canvas", () => {
       context.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height)
       setHistory([])
       setHistoryIndex(-1)
     })
 
+    // Cursor events
+    socket.on("cursor-move", ({ id, userName, color, x, y }) => {
+      setRemoteCursors(prev => ({
+        ...prev,
+        [id]: { userName, color, x, y }
+      }))
+    })
+
+    socket.on("cursor-leave", ({ id }) => {
+      setRemoteCursors(prev => {
+        const updated = { ...prev }
+        delete updated[id]
+        return updated
+      })
+    })
+
+    socket.on("user-left", ({ id }) => {
+      setRemoteCursors(prev => {
+        const updated = { ...prev }
+        delete updated[id]
+        return updated
+      })
+    })
+
     return () => {
       socket.off("draw")
       socket.off("canvas-state")
       socket.off("clear-canvas")
+      socket.off("cursor-move")
+      socket.off("cursor-leave")
+      socket.off("user-left")
     }
   }, [socket, context, roomCode, userName])
 
-  // Update context when color/size changes
   useEffect(() => {
     if (context) {
       context.strokeStyle = color
@@ -99,7 +129,6 @@ export default function Whiteboard({ roomCode, userName }) {
     }
   }, [color, lineWidth, context])
 
-  // Draw a line (used for both local and remote drawing)
   const drawLine = (x0, y0, x1, y1, strokeColor, strokeWidth) => {
     if (!context) return
     context.beginPath()
@@ -127,6 +156,35 @@ export default function Whiteboard({ roomCode, userName }) {
     }
   }
 
+  // Throttled cursor emit (every 50ms max)
+  const emitCursor = useCallback((x, y) => {
+    if (throttleRef.current) return
+    
+    throttleRef.current = setTimeout(() => {
+      throttleRef.current = null
+    }, 50)
+
+    if (socket) {
+      socket.emit("cursor-move", { x, y })
+    }
+  }, [socket])
+
+  const handleMouseMove = (e) => {
+    const { x, y } = getCoordinates(e)
+    emitCursor(x, y)
+    
+    if (isDrawing) {
+      draw(e)
+    }
+  }
+
+  const handleMouseLeave = () => {
+    if (socket) {
+      socket.emit("cursor-leave")
+    }
+    stopDrawing()
+  }
+
   const startDrawing = (e) => {
     e.preventDefault()
     const { x, y } = getCoordinates(e)
@@ -145,10 +203,8 @@ export default function Whiteboard({ roomCode, userName }) {
     }
 
     animationRef.current = requestAnimationFrame(() => {
-      // Draw locally
       drawLine(lastPoint.current.x, lastPoint.current.y, x, y, color, lineWidth)
       
-      // Emit to others
       if (socket) {
         socket.emit("draw", {
           x0: lastPoint.current.x,
@@ -172,7 +228,6 @@ export default function Whiteboard({ roomCode, userName }) {
       cancelAnimationFrame(animationRef.current)
     }
 
-    // Save to history
     const canvas = canvasRef.current
     const dataUrl = canvas.toDataURL()
     
@@ -182,7 +237,6 @@ export default function Whiteboard({ roomCode, userName }) {
     setHistory(newHistory)
     setHistoryIndex(newHistory.length - 1)
 
-    // Send canvas state for late joiners
     if (socket) {
       socket.emit("canvas-state-update", dataUrl)
     }
@@ -261,10 +315,7 @@ export default function Whiteboard({ roomCode, userName }) {
                 lineWidth === s ? "bg-gray-200" : "hover:bg-gray-100"
               }`}
             >
-              <div
-                className="rounded-full bg-gray-800"
-                style={{ width: s + 4, height: s + 4 }}
-              />
+              <div className="rounded-full bg-gray-800" style={{ width: s + 4, height: s + 4 }} />
             </button>
           ))}
         </div>
@@ -284,19 +335,30 @@ export default function Whiteboard({ roomCode, userName }) {
         </div>
       </div>
 
-      {/* Canvas */}
-      <div ref={containerRef} className="flex-1 bg-white cursor-crosshair">
+      {/* Canvas container with cursors */}
+      <div ref={containerRef} className="flex-1 bg-white cursor-crosshair relative overflow-hidden">
         <canvas
           ref={canvasRef}
           onMouseDown={startDrawing}
-          onMouseMove={draw}
+          onMouseMove={handleMouseMove}
           onMouseUp={stopDrawing}
-          onMouseLeave={stopDrawing}
+          onMouseLeave={handleMouseLeave}
           onTouchStart={startDrawing}
           onTouchMove={draw}
           onTouchEnd={stopDrawing}
           className="touch-none"
         />
+        
+        {/* Remote cursors overlay */}
+        {Object.entries(remoteCursors).map(([id, cursor]) => (
+          <Cursor
+            key={id}
+            x={cursor.x}
+            y={cursor.y}
+            name={cursor.userName}
+            color={cursor.color}
+          />
+        ))}
       </div>
     </div>
   )
