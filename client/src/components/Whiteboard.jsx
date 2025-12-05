@@ -1,26 +1,24 @@
 import { useRef, useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
 import { Undo2, Redo2, Trash2 } from "lucide-react"
+import { useSocket } from "@/context/SocketContext"
 
-export default function Whiteboard() {
+export default function Whiteboard({ roomCode, userName }) {
+  const socket = useSocket()
   const canvasRef = useRef(null)
   const containerRef = useRef(null)
   const [isDrawing, setIsDrawing] = useState(false)
   const [context, setContext] = useState(null)
   
-  // Drawing state
   const [color, setColor] = useState("#292524")
   const [lineWidth, setLineWidth] = useState(3)
   
-  // History for undo/redo
   const [history, setHistory] = useState([])
   const [historyIndex, setHistoryIndex] = useState(-1)
   
-  // Current stroke points (for smooth drawing)
-  const currentStroke = useRef([])
+  const lastPoint = useRef(null)
   const animationRef = useRef(null)
 
-  // Colors palette
   const colors = ["#292524", "#EA580C", "#8B5CF6", "#16A34A", "#DC2626", "#2563EB"]
   const sizes = [2, 4, 6, 10]
 
@@ -30,9 +28,14 @@ export default function Whiteboard() {
     const container = containerRef.current
     if (!canvas || !container) return
 
-    // Set canvas size to match container
     const resizeCanvas = () => {
       const rect = container.getBoundingClientRect()
+      const tempCanvas = document.createElement("canvas")
+      const tempCtx = tempCanvas.getContext("2d")
+      tempCanvas.width = canvas.width
+      tempCanvas.height = canvas.height
+      tempCtx.drawImage(canvas, 0, 0)
+
       canvas.width = rect.width
       canvas.height = rect.height
       
@@ -41,20 +44,52 @@ export default function Whiteboard() {
       ctx.lineJoin = "round"
       ctx.strokeStyle = color
       ctx.lineWidth = lineWidth
+      ctx.drawImage(tempCanvas, 0, 0)
       setContext(ctx)
-      
-      // Redraw current state after resize
-      if (historyIndex >= 0 && history[historyIndex]) {
-        const img = new Image()
-        img.onload = () => ctx.drawImage(img, 0, 0)
-        img.src = history[historyIndex]
-      }
     }
 
     resizeCanvas()
     window.addEventListener("resize", resizeCanvas)
     return () => window.removeEventListener("resize", resizeCanvas)
   }, [])
+
+  // Socket listeners
+  useEffect(() => {
+    if (!socket || !context) return
+
+    // Join room
+    socket.emit("join-room", { roomCode, userName })
+
+    // Receive drawing from others
+    socket.on("draw", (data) => {
+      drawLine(data.x0, data.y0, data.x1, data.y1, data.color, data.lineWidth)
+    })
+
+    // Receive full canvas state (for late joiners)
+    socket.on("canvas-state", (dataUrl) => {
+      if (dataUrl) {
+        const img = new Image()
+        img.onload = () => {
+          context.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height)
+          context.drawImage(img, 0, 0)
+        }
+        img.src = dataUrl
+      }
+    })
+
+    // Clear canvas from others
+    socket.on("clear-canvas", () => {
+      context.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height)
+      setHistory([])
+      setHistoryIndex(-1)
+    })
+
+    return () => {
+      socket.off("draw")
+      socket.off("canvas-state")
+      socket.off("clear-canvas")
+    }
+  }, [socket, context, roomCode, userName])
 
   // Update context when color/size changes
   useEffect(() => {
@@ -64,7 +99,18 @@ export default function Whiteboard() {
     }
   }, [color, lineWidth, context])
 
-  // Get coordinates from mouse or touch event
+  // Draw a line (used for both local and remote drawing)
+  const drawLine = (x0, y0, x1, y1, strokeColor, strokeWidth) => {
+    if (!context) return
+    context.beginPath()
+    context.strokeStyle = strokeColor
+    context.lineWidth = strokeWidth
+    context.moveTo(x0, y0)
+    context.lineTo(x1, y1)
+    context.stroke()
+    context.closePath()
+  }
+
   const getCoordinates = (e) => {
     const canvas = canvasRef.current
     const rect = canvas.getBoundingClientRect()
@@ -81,68 +127,74 @@ export default function Whiteboard() {
     }
   }
 
-  // Start drawing
   const startDrawing = (e) => {
     e.preventDefault()
     const { x, y } = getCoordinates(e)
     setIsDrawing(true)
-    currentStroke.current = [{ x, y }]
-    
-    context.beginPath()
-    context.moveTo(x, y)
+    lastPoint.current = { x, y }
   }
 
-  // Draw with requestAnimationFrame for smooth rendering
   const draw = useCallback((e) => {
-    if (!isDrawing || !context) return
+    if (!isDrawing || !context || !lastPoint.current) return
     e.preventDefault()
     
     const { x, y } = getCoordinates(e)
-    currentStroke.current.push({ x, y })
 
-    // Cancel previous frame and request new one
     if (animationRef.current) {
       cancelAnimationFrame(animationRef.current)
     }
 
     animationRef.current = requestAnimationFrame(() => {
-      context.lineTo(x, y)
-      context.stroke()
+      // Draw locally
+      drawLine(lastPoint.current.x, lastPoint.current.y, x, y, color, lineWidth)
+      
+      // Emit to others
+      if (socket) {
+        socket.emit("draw", {
+          x0: lastPoint.current.x,
+          y0: lastPoint.current.y,
+          x1: x,
+          y1: y,
+          color,
+          lineWidth
+        })
+      }
+      
+      lastPoint.current = { x, y }
     })
-  }, [isDrawing, context])
+  }, [isDrawing, context, color, lineWidth, socket])
 
-  // Stop drawing and save to history
   const stopDrawing = () => {
     if (!isDrawing) return
     setIsDrawing(false)
-    context.closePath()
     
     if (animationRef.current) {
       cancelAnimationFrame(animationRef.current)
     }
 
-    // Save current canvas state to history
-    if (currentStroke.current.length > 1) {
-      const canvas = canvasRef.current
-      const dataUrl = canvas.toDataURL()
-      
-      // Remove any redo states after current index
-      const newHistory = history.slice(0, historyIndex + 1)
-      newHistory.push(dataUrl)
-      
-      setHistory(newHistory)
-      setHistoryIndex(newHistory.length - 1)
+    // Save to history
+    const canvas = canvasRef.current
+    const dataUrl = canvas.toDataURL()
+    
+    const newHistory = history.slice(0, historyIndex + 1)
+    newHistory.push(dataUrl)
+    
+    setHistory(newHistory)
+    setHistoryIndex(newHistory.length - 1)
+
+    // Send canvas state for late joiners
+    if (socket) {
+      socket.emit("canvas-state-update", dataUrl)
     }
     
-    currentStroke.current = []
+    lastPoint.current = null
   }
 
-  // Undo
   const undo = () => {
     if (historyIndex <= 0) {
-      // Clear canvas if at beginning
       context.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height)
       setHistoryIndex(-1)
+      if (socket) socket.emit("undo", null)
       return
     }
     
@@ -154,9 +206,10 @@ export default function Whiteboard() {
     }
     img.src = history[newIndex]
     setHistoryIndex(newIndex)
+    
+    if (socket) socket.emit("undo", history[newIndex])
   }
 
-  // Redo
   const redo = () => {
     if (historyIndex >= history.length - 1) return
     
@@ -168,20 +221,22 @@ export default function Whiteboard() {
     }
     img.src = history[newIndex]
     setHistoryIndex(newIndex)
+    
+    if (socket) socket.emit("undo", history[newIndex])
   }
 
-  // Clear canvas
   const clearCanvas = () => {
     context.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height)
     setHistory([])
     setHistoryIndex(-1)
+    
+    if (socket) socket.emit("clear-canvas")
   }
 
   return (
     <div className="flex flex-col h-full">
       {/* Toolbar */}
       <div className="flex items-center gap-4 p-3 border-b bg-white">
-        {/* Colors */}
         <div className="flex items-center gap-1">
           {colors.map((c) => (
             <button
@@ -195,10 +250,8 @@ export default function Whiteboard() {
           ))}
         </div>
 
-        {/* Divider */}
         <div className="w-px h-6 bg-gray-300" />
 
-        {/* Sizes */}
         <div className="flex items-center gap-1">
           {sizes.map((s) => (
             <button
@@ -216,42 +269,22 @@ export default function Whiteboard() {
           ))}
         </div>
 
-        {/* Divider */}
         <div className="w-px h-6 bg-gray-300" />
 
-        {/* Actions */}
         <div className="flex items-center gap-1">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={undo}
-            disabled={historyIndex < 0}
-            title="Undo"
-          >
+          <Button variant="ghost" size="sm" onClick={undo} disabled={historyIndex < 0} title="Undo">
             <Undo2 className="w-4 h-4" />
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={redo}
-            disabled={historyIndex >= history.length - 1}
-            title="Redo"
-          >
+          <Button variant="ghost" size="sm" onClick={redo} disabled={historyIndex >= history.length - 1} title="Redo">
             <Redo2 className="w-4 h-4" />
           </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={clearCanvas}
-            className="text-red-500 hover:text-red-600 hover:bg-red-50"
-            title="Clear"
-          >
+          <Button variant="ghost" size="sm" onClick={clearCanvas} className="text-red-500 hover:text-red-600 hover:bg-red-50" title="Clear">
             <Trash2 className="w-4 h-4" />
           </Button>
         </div>
       </div>
 
-      {/* Canvas container */}
+      {/* Canvas */}
       <div ref={containerRef} className="flex-1 bg-white cursor-crosshair">
         <canvas
           ref={canvasRef}
