@@ -13,9 +13,11 @@ export default function Room() {
   const isHost = searchParams.get("host") === "true"
 
   const [room, setRoom] = useState(null)
+  const [onlineUsers, setOnlineUsers] = useState([])
   const socket = useSocket()
   const { toast } = useToast()
 
+  // Fetch room data
   useEffect(() => {
     fetch(`/api/rooms/join`, {
       method: "POST",
@@ -27,31 +29,30 @@ export default function Room() {
       .catch(console.error)
   }, [code, name])
 
-  // Listen for user join/leave
+  // Socket events for online users
   useEffect(() => {
     if (!socket) return
 
-    socket.on("user-joined", ({ userName }) => {
-      toast({ title: "User joined", description: `${userName} joined the room` })
-      // Refresh participants
-      fetch(`/api/rooms/join`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ code, name }),
-      })
-        .then((r) => r.json())
-        .then(setRoom)
+    socket.on("users-in-room", (users) => {
+      setOnlineUsers(users)
     })
 
-    socket.on("user-left", ({ userName }) => {
+    socket.on("user-joined", (user) => {
+      toast({ title: "User joined", description: `${user.userName} joined the room` })
+      setOnlineUsers(prev => [...prev.filter(u => u.id !== user.id), user])
+    })
+
+    socket.on("user-left", ({ id, userName }) => {
       toast({ title: "User left", description: `${userName} left the room` })
+      setOnlineUsers(prev => prev.filter(u => u.id !== id))
     })
 
     return () => {
+      socket.off("users-in-room")
       socket.off("user-joined")
       socket.off("user-left")
     }
-  }, [socket, toast, code, name])
+  }, [socket, toast])
 
   return (
     <div className="h-screen bg-background flex flex-col overflow-hidden">
@@ -61,9 +62,15 @@ export default function Room() {
           Room: <span className="text-[#EA580C]">{code}</span>
           {isHost && <span className="ml-2 text-sm text-[#8B5CF6]">(Host)</span>}
         </h1>
-        <span className="text-sm text-text/60 font-body">
-          Mode: <strong className="text-[#8B5CF6]">{type}</strong>
-        </span>
+        <div className="flex items-center gap-4">
+          <span className="text-sm text-text/60 font-body">
+            Mode: <strong className="text-[#8B5CF6]">{type}</strong>
+          </span>
+          <span className="text-sm text-text/60 font-body flex items-center gap-1">
+            <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+            {onlineUsers.length} online
+          </span>
+        </div>
       </header>
 
       {/* Main content */}
@@ -72,20 +79,26 @@ export default function Room() {
         <aside className="w-64 border-r bg-white p-4 flex flex-col">
           <div className="flex items-center gap-2 mb-4">
             <Users className="w-5 h-5 text-[#EA580C]" />
-            <h2 className="font-heading font-semibold text-text">Participants</h2>
+            <h2 className="font-heading font-semibold text-text">
+              Participants ({onlineUsers.length})
+            </h2>
           </div>
           <div className="flex-1 overflow-y-auto space-y-2">
-            {room?.participants?.map((p, i) => (
-              <div key={i} className="flex items-center gap-2 p-2 rounded-lg bg-background">
-                <div
-                  className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm"
-                  style={{ backgroundColor: p.name === room.hostName ? "#8B5CF6" : "#EA580C" }}
-                >
-                  {p.name.charAt(0).toUpperCase()}
+            {onlineUsers.map((user) => (
+              <div key={user.id} className="flex items-center gap-2 p-2 rounded-lg bg-background">
+                <div className="relative">
+                  <div
+                    className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm"
+                    style={{ backgroundColor: user.color }}
+                  >
+                    {user.userName.charAt(0).toUpperCase()}
+                  </div>
+                  {/* Online indicator */}
+                  <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-green-500 border-2 border-white" />
                 </div>
                 <span className="font-body text-sm text-text">
-                  {p.name}
-                  {p.name === room.hostName && <span className="ml-1 text-xs text-[#8B5CF6]">(host)</span>}
+                  {user.userName}
+                  {user.userName === name && <span className="ml-1 text-xs text-gray-400">(you)</span>}
                 </span>
               </div>
             ))}
