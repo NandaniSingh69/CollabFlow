@@ -2,6 +2,7 @@ import { useEffect, useState } from "react"
 import { useParams, useSearchParams } from "react-router-dom"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Users } from "lucide-react"
+import Whiteboard from "@/components/Whiteboard"
 
 export default function Room() {
   const { code } = useParams()
@@ -67,18 +68,9 @@ export default function Room() {
           </div>
         </aside>
 
-        {/* Canvas area - takes remaining space */}
-        <main className="flex-1 p-4 flex flex-col">
-          <Card className="flex-1 flex flex-col">
-            <CardHeader className="py-3 border-b">
-              <CardTitle className="text-lg font-heading">Whiteboard</CardTitle>
-            </CardHeader>
-            <CardContent className="flex-1 p-2">
-              <div className="w-full h-full bg-white border-2 border-dashed border-gray-200 rounded-lg flex items-center justify-center text-gray-400 font-body">
-                Canvas coming in Phase 3 — will fill this entire area
-              </div>
-            </CardContent>
-          </Card>
+        {/* Canvas area */}
+        <main className="flex-1 flex flex-col overflow-hidden">
+          <Whiteboard />
         </main>
       </div>
     </div>
