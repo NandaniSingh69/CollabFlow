@@ -1,8 +1,9 @@
 import { useEffect, useState } from "react"
 import { useParams, useSearchParams } from "react-router-dom"
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Users } from "lucide-react"
 import Whiteboard from "@/components/Whiteboard"
+import { useSocket } from "@/context/SocketContext"
+import { useToast } from "@/hooks/use-toast"
 
 export default function Room() {
   const { code } = useParams()
@@ -12,6 +13,8 @@ export default function Room() {
   const isHost = searchParams.get("host") === "true"
 
   const [room, setRoom] = useState(null)
+  const socket = useSocket()
+  const { toast } = useToast()
 
   useEffect(() => {
     fetch(`/api/rooms/join`, {
@@ -23,6 +26,32 @@ export default function Room() {
       .then(setRoom)
       .catch(console.error)
   }, [code, name])
+
+  // Listen for user join/leave
+  useEffect(() => {
+    if (!socket) return
+
+    socket.on("user-joined", ({ userName }) => {
+      toast({ title: "User joined", description: `${userName} joined the room` })
+      // Refresh participants
+      fetch(`/api/rooms/join`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ code, name }),
+      })
+        .then((r) => r.json())
+        .then(setRoom)
+    })
+
+    socket.on("user-left", ({ userName }) => {
+      toast({ title: "User left", description: `${userName} left the room` })
+    })
+
+    return () => {
+      socket.off("user-joined")
+      socket.off("user-left")
+    }
+  }, [socket, toast, code, name])
 
   return (
     <div className="h-screen bg-background flex flex-col overflow-hidden">
@@ -39,7 +68,7 @@ export default function Room() {
 
       {/* Main content */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar - Participants */}
+        {/* Sidebar */}
         <aside className="w-64 border-r bg-white p-4 flex flex-col">
           <div className="flex items-center gap-2 mb-4">
             <Users className="w-5 h-5 text-[#EA580C]" />
@@ -47,10 +76,7 @@ export default function Room() {
           </div>
           <div className="flex-1 overflow-y-auto space-y-2">
             {room?.participants?.map((p, i) => (
-              <div
-                key={i}
-                className="flex items-center gap-2 p-2 rounded-lg bg-background"
-              >
+              <div key={i} className="flex items-center gap-2 p-2 rounded-lg bg-background">
                 <div
                   className="w-8 h-8 rounded-full flex items-center justify-center text-white font-bold text-sm"
                   style={{ backgroundColor: p.name === room.hostName ? "#8B5CF6" : "#EA580C" }}
@@ -59,18 +85,16 @@ export default function Room() {
                 </div>
                 <span className="font-body text-sm text-text">
                   {p.name}
-                  {p.name === room.hostName && (
-                    <span className="ml-1 text-xs text-[#8B5CF6]">(host)</span>
-                  )}
+                  {p.name === room.hostName && <span className="ml-1 text-xs text-[#8B5CF6]">(host)</span>}
                 </span>
               </div>
             ))}
           </div>
         </aside>
 
-        {/* Canvas area */}
+        {/* Canvas */}
         <main className="flex-1 flex flex-col overflow-hidden">
-          <Whiteboard />
+          <Whiteboard roomCode={code} userName={name} />
         </main>
       </div>
     </div>
