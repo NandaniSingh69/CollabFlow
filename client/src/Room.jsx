@@ -1,7 +1,8 @@
 import { useEffect, useState } from "react"
 import { useParams, useSearchParams } from "react-router-dom"
-import { Users } from "lucide-react"
+import { Users, MessageSquare } from "lucide-react"
 import Whiteboard from "@/components/Whiteboard"
+import Chat from "@/components/Chat"
 import { useSocket } from "@/context/SocketContext"
 import { useToast } from "@/hooks/use-toast"
 
@@ -14,11 +15,11 @@ export default function Room() {
 
   const [room, setRoom] = useState(null)
   const [onlineUsers, setOnlineUsers] = useState([])
-  const [locked, setLocked] = useState(false) 
+  const [locked, setLocked] = useState(false)
+  const [chatOpen, setChatOpen] = useState(true)  // ← ADD THIS
   const socket = useSocket()
   const { toast } = useToast()
 
-  // Fetch room data
   useEffect(() => {
     fetch(`/api/rooms/join`, {
       method: "POST",
@@ -30,7 +31,6 @@ export default function Room() {
       .catch(console.error)
   }, [code, name])
 
-  // Socket events for online users
   useEffect(() => {
     if (!socket) return
 
@@ -49,8 +49,8 @@ export default function Room() {
     })
 
     socket.on("lock-changed", ({ locked }) => {
-    setLocked(locked)
-  })
+      setLocked(locked)
+    })
 
     return () => {
       socket.off("users-in-room")
@@ -72,27 +72,38 @@ export default function Room() {
           <span className="text-sm text-text/60 font-body">
             Mode: <strong className="text-[#8B5CF6]">{type}</strong>
           </span>
+          {isHost && (
+            <button
+              onClick={() => socket?.emit("set-lock", { locked: !locked })}
+              className={`px-3 py-1 rounded-full text-xs font-medium border transition-colors ${
+                locked
+                  ? "bg-red-50 text-red-600 border-red-200 hover:bg-red-100"
+                  : "bg-green-50 text-green-600 border-green-200 hover:bg-green-100"
+              }`}
+            >
+              {locked ? "🔒 Drawing locked" : "🔓 Drawing unlocked"}
+            </button>
+          )}
+          {/* Chat toggle button when closed */}
+          {!chatOpen && (
+            <button
+              onClick={() => setChatOpen(true)}
+              className="px-3 py-1.5 rounded-lg bg-[#EA580C] hover:bg-[#EA580C]/90 text-white flex items-center gap-2 text-sm font-medium transition-colors"
+            >
+              <MessageSquare className="w-4 h-4" />
+              Open Chat
+            </button>
+          )}
           <span className="text-sm text-text/60 font-body flex items-center gap-1">
             <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
             {onlineUsers.length} online
           </span>
-          <button
-      disabled={!isHost}
-      onClick={() => socket?.emit("set-lock", { locked: !locked })}
-      className={`px-3 py-1 rounded-full text-xs font-medium border ${
-        locked
-          ? "bg-red-50 text-red-600 border-red-200"
-          : "bg-green-50 text-green-600 border-green-200"
-      }`}
-    >
-      {locked ? "Drawing locked" : "Drawing unlocked"}
-    </button>
         </div>
       </header>
 
       {/* Main content */}
       <div className="flex flex-1 overflow-hidden">
-        {/* Sidebar */}
+        {/* Left Sidebar - Participants */}
         <aside className="w-64 border-r bg-white p-4 flex flex-col">
           <div className="flex items-center gap-2 mb-4">
             <Users className="w-5 h-5 text-[#EA580C]" />
@@ -110,7 +121,6 @@ export default function Room() {
                   >
                     {user.userName.charAt(0).toUpperCase()}
                   </div>
-                  {/* Online indicator */}
                   <span className="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full bg-green-500 border-2 border-white" />
                 </div>
                 <span className="font-body text-sm text-text">
@@ -122,10 +132,17 @@ export default function Room() {
           </div>
         </aside>
 
-        {/* Canvas */}
+        {/* Center - Canvas */}
         <main className="flex-1 flex flex-col overflow-hidden">
           <Whiteboard roomCode={code} userName={name} canDraw={!locked || isHost} />
         </main>
+
+        {/* Right Sidebar - Chat (conditional) */}
+        {chatOpen && (
+          <aside className="w-80">
+            <Chat roomCode={code} onClose={() => setChatOpen(false)} />
+          </aside>
+        )}
       </div>
     </div>
   )

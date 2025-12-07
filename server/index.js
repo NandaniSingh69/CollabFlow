@@ -141,6 +141,21 @@ io.on("connection", (socket) => {
     io.to(socket.roomCode).emit("lock-changed", { locked })
   })
 
+  // Chat message
+socket.on("chat-message", ({ message }) => {
+  if (!socket.roomCode || !message.trim()) return
+  
+  const chatData = {
+    id: Date.now(),
+    userName: socket.userName,
+    message: message.trim(),
+    timestamp: new Date().toISOString(),
+    type: "user" // vs "system"
+  }
+  
+  io.to(socket.roomCode).emit("chat-message", chatData)
+})
+
   // Disconnect
   socket.on("disconnect", () => {
     if (socket.roomCode) {
