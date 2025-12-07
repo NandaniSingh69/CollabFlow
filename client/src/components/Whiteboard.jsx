@@ -1,10 +1,10 @@
-import { useRef, useState, useEffect, useCallback } from "react"
+import { useRef, useState, useEffect, useCallback, forwardRef, useImperativeHandle } from "react"
 import { Button } from "@/components/ui/button"
 import { Undo2, Redo2, Trash2 } from "lucide-react"
 import { useSocket } from "@/context/SocketContext"
 import Cursor from "./Cursor"
 
-export default function Whiteboard({ roomCode, userName, canDraw }) {
+const Whiteboard = forwardRef(({ roomCode, userName, canDraw, roomType }, ref) => {
   const socket = useSocket()
   const canvasRef = useRef(null)
   const containerRef = useRef(null)
@@ -26,7 +26,9 @@ export default function Whiteboard({ roomCode, userName, canDraw }) {
 
   const colors = ["#292524", "#EA580C", "#8B5CF6", "#16A34A", "#DC2626", "#2563EB"]
   const sizes = [2, 4, 6, 10]
-
+useImperativeHandle(ref, () => ({
+    getCanvas: () => canvasRef.current
+  }))
   // Initialize canvas
   useEffect(() => {
     const canvas = canvasRef.current
@@ -292,50 +294,61 @@ const redo = () => {
   return (
     <div className="flex flex-col h-full">
       {/* Toolbar */}
-      <div className="flex items-center gap-4 p-3 border-b bg-white">
-        <div className="flex items-center gap-1">
-          {colors.map((c) => (
-            <button
-              key={c}
-              onClick={() => setColor(c)}
-              className={`w-7 h-7 rounded-full border-2 transition-transform ${
-                color === c ? "border-gray-800 scale-110" : "border-transparent"
-              }`}
-              style={{ backgroundColor: c }}
-            />
-          ))}
-        </div>
+  <div className="flex items-center justify-between p-3 border-b bg-white">
+  <div className="flex items-center gap-4">
+    {/* Your existing colors, sizes, and actions stay here */}
+    <div className="flex items-center gap-1">
+      {colors.map((c) => (
+        <button
+          key={c}
+          onClick={() => setColor(c)}
+          className={`w-7 h-7 rounded-full border-2 transition-transform ${
+            color === c ? "border-gray-800 scale-110" : "border-transparent"
+          }`}
+          style={{ backgroundColor: c }}
+        />
+      ))}
+    </div>
 
-        <div className="w-px h-6 bg-gray-300" />
+    <div className="w-px h-6 bg-gray-300" />
 
-        <div className="flex items-center gap-1">
-          {sizes.map((s) => (
-            <button
-              key={s}
-              onClick={() => setLineWidth(s)}
-              className={`w-8 h-8 rounded flex items-center justify-center transition-colors ${
-                lineWidth === s ? "bg-gray-200" : "hover:bg-gray-100"
-              }`}
-            >
-              <div className="rounded-full bg-gray-800" style={{ width: s + 4, height: s + 4 }} />
-            </button>
-          ))}
-        </div>
+    <div className="flex items-center gap-1">
+      {sizes.map((s) => (
+        <button
+          key={s}
+          onClick={() => setLineWidth(s)}
+          className={`w-8 h-8 rounded flex items-center justify-center transition-colors ${
+            lineWidth === s ? "bg-gray-200" : "hover:bg-gray-100"
+          }`}
+        >
+          <div className="rounded-full bg-gray-800" style={{ width: s + 4, height: s + 4 }} />
+        </button>
+      ))}
+    </div>
 
-        <div className="w-px h-6 bg-gray-300" />
+    <div className="w-px h-6 bg-gray-300" />
 
-        <div className="flex items-center gap-1">
-          <Button variant="ghost" size="sm" onClick={undo} disabled={historyIndex < 0} title="Undo">
-            <Undo2 className="w-4 h-4" />
-          </Button>
-          <Button variant="ghost" size="sm" onClick={redo} disabled={historyIndex >= history.length - 1} title="Redo">
-            <Redo2 className="w-4 h-4" />
-          </Button>
-          <Button variant="ghost" size="sm" onClick={clearCanvas} className="text-red-500 hover:text-red-600 hover:bg-red-50" title="Clear">
-            <Trash2 className="w-4 h-4" />
-          </Button>
-        </div>
-      </div>
+    <div className="flex items-center gap-1">
+      <Button variant="ghost" size="sm" onClick={undo} disabled={historyIndex < 0} title="Undo">
+        <Undo2 className="w-4 h-4" />
+      </Button>
+      <Button variant="ghost" size="sm" onClick={redo} disabled={historyIndex >= history.length - 1} title="Redo">
+        <Redo2 className="w-4 h-4" />
+      </Button>
+      <Button variant="ghost" size="sm" onClick={clearCanvas} className="text-red-500 hover:text-red-600 hover:bg-red-50" title="Clear">
+        <Trash2 className="w-4 h-4" />
+      </Button>
+    </div>
+  </div>
+
+  {/* ADD THIS - Right side mode badge */}
+  {roomType && (
+    <div className="text-xs font-medium text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full">
+      {roomType === "professional" ? "📋 Professional Mode" : "🎮 Fun Mode"}
+    </div>
+  )}
+</div>
+
 
       {/* Canvas container with cursors */}
       <div ref={containerRef} className="flex-1 bg-white cursor-crosshair relative overflow-hidden">
@@ -364,4 +377,7 @@ const redo = () => {
       </div>
     </div>
   )
-}
+})
+
+Whiteboard.displayName = "Whiteboard"
+export default Whiteboard

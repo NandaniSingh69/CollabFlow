@@ -1,8 +1,9 @@
-import { useEffect, useState } from "react"
+import { useEffect, useState, useRef } from "react"
 import { useParams, useSearchParams } from "react-router-dom"
 import { Users, MessageSquare } from "lucide-react"
 import Whiteboard from "@/components/Whiteboard"
 import Chat from "@/components/Chat"
+import ExportButton from "@/components/ExportButton"
 import { useSocket } from "@/context/SocketContext"
 import { useToast } from "@/hooks/use-toast"
 
@@ -16,7 +17,8 @@ export default function Room() {
   const [room, setRoom] = useState(null)
   const [onlineUsers, setOnlineUsers] = useState([])
   const [locked, setLocked] = useState(false)
-  const [chatOpen, setChatOpen] = useState(true)  // ← ADD THIS
+  const [chatOpen, setChatOpen] = useState(true)
+  const whiteboardRef = useRef()
   const socket = useSocket()
   const { toast } = useToast()
 
@@ -72,6 +74,15 @@ export default function Room() {
           <span className="text-sm text-text/60 font-body">
             Mode: <strong className="text-[#8B5CF6]">{type}</strong>
           </span>
+          
+          {/* Professional mode: Export button */}
+          {type === "professional" && whiteboardRef.current && (
+            <ExportButton 
+              canvasRef={{ current: whiteboardRef.current?.getCanvas() }} 
+              roomCode={code} 
+            />
+          )}
+
           {isHost && (
             <button
               onClick={() => socket?.emit("set-lock", { locked: !locked })}
@@ -84,7 +95,7 @@ export default function Room() {
               {locked ? "🔒 Drawing locked" : "🔓 Drawing unlocked"}
             </button>
           )}
-          {/* Chat toggle button when closed */}
+          
           {!chatOpen && (
             <button
               onClick={() => setChatOpen(true)}
@@ -94,6 +105,7 @@ export default function Room() {
               Open Chat
             </button>
           )}
+          
           <span className="text-sm text-text/60 font-body flex items-center gap-1">
             <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
             {onlineUsers.length} online
@@ -134,10 +146,16 @@ export default function Room() {
 
         {/* Center - Canvas */}
         <main className="flex-1 flex flex-col overflow-hidden">
-          <Whiteboard roomCode={code} userName={name} canDraw={!locked || isHost} />
+          <Whiteboard 
+            ref={whiteboardRef}
+            roomCode={code} 
+            userName={name} 
+            canDraw={!locked || isHost}
+            roomType={type}
+          />
         </main>
 
-        {/* Right Sidebar - Chat (conditional) */}
+        {/* Right Sidebar - Chat */}
         {chatOpen && (
           <aside className="w-80">
             <Chat roomCode={code} onClose={() => setChatOpen(false)} />
