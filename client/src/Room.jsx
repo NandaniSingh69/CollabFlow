@@ -14,6 +14,7 @@ export default function Room() {
 
   const [room, setRoom] = useState(null)
   const [onlineUsers, setOnlineUsers] = useState([])
+  const [locked, setLocked] = useState(false) 
   const socket = useSocket()
   const { toast } = useToast()
 
@@ -47,10 +48,15 @@ export default function Room() {
       setOnlineUsers(prev => prev.filter(u => u.id !== id))
     })
 
+    socket.on("lock-changed", ({ locked }) => {
+    setLocked(locked)
+  })
+
     return () => {
       socket.off("users-in-room")
       socket.off("user-joined")
       socket.off("user-left")
+      socket.off("lock-changed")
     }
   }, [socket, toast])
 
@@ -70,6 +76,17 @@ export default function Room() {
             <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
             {onlineUsers.length} online
           </span>
+          <button
+      disabled={!isHost}
+      onClick={() => socket?.emit("set-lock", { locked: !locked })}
+      className={`px-3 py-1 rounded-full text-xs font-medium border ${
+        locked
+          ? "bg-red-50 text-red-600 border-red-200"
+          : "bg-green-50 text-green-600 border-green-200"
+      }`}
+    >
+      {locked ? "Drawing locked" : "Drawing unlocked"}
+    </button>
         </div>
       </header>
 
@@ -107,7 +124,7 @@ export default function Room() {
 
         {/* Canvas */}
         <main className="flex-1 flex flex-col overflow-hidden">
-          <Whiteboard roomCode={code} userName={name} />
+          <Whiteboard roomCode={code} userName={name} canDraw={!locked || isHost} />
         </main>
       </div>
     </div>

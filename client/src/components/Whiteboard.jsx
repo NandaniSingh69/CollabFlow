@@ -4,7 +4,7 @@ import { Undo2, Redo2, Trash2 } from "lucide-react"
 import { useSocket } from "@/context/SocketContext"
 import Cursor from "./Cursor"
 
-export default function Whiteboard({ roomCode, userName }) {
+export default function Whiteboard({ roomCode, userName, canDraw }) {
   const socket = useSocket()
   const canvasRef = useRef(null)
   const containerRef = useRef(null)
@@ -185,15 +185,17 @@ export default function Whiteboard({ roomCode, userName }) {
     stopDrawing()
   }
 
-  const startDrawing = (e) => {
-    e.preventDefault()
-    const { x, y } = getCoordinates(e)
-    setIsDrawing(true)
-    lastPoint.current = { x, y }
-  }
+ const startDrawing = (e) => {
+  if (!canDraw) return  // ← ADD THIS LINE
+  e.preventDefault()
+  const { x, y } = getCoordinates(e)
+  setIsDrawing(true)
+  lastPoint.current = { x, y }
+}
+
 
   const draw = useCallback((e) => {
-    if (!isDrawing || !context || !lastPoint.current) return
+    if (!canDraw || !isDrawing || !context || !lastPoint.current) return  
     e.preventDefault()
     
     const { x, y } = getCoordinates(e)
@@ -218,7 +220,8 @@ export default function Whiteboard({ roomCode, userName }) {
       
       lastPoint.current = { x, y }
     })
-  }, [isDrawing, context, color, lineWidth, socket])
+ }, [canDraw, isDrawing, context, color, lineWidth, socket])  
+
 
   const stopDrawing = () => {
     if (!isDrawing) return
@@ -245,39 +248,38 @@ export default function Whiteboard({ roomCode, userName }) {
   }
 
   const undo = () => {
-    if (historyIndex <= 0) {
-      context.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height)
-      setHistoryIndex(-1)
-      if (socket) socket.emit("undo", null)
-      return
-    }
-    
-    const newIndex = historyIndex - 1
-    const img = new Image()
-    img.onload = () => {
-      context.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height)
-      context.drawImage(img, 0, 0)
-    }
-    img.src = history[newIndex]
-    setHistoryIndex(newIndex)
-    
-    if (socket) socket.emit("undo", history[newIndex])
+  if (historyIndex <= 0) {
+    context.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height)
+    setHistoryIndex(-1)
+    if (socket) socket.emit("undo", null)  // means empty board
+    return
   }
 
-  const redo = () => {
-    if (historyIndex >= history.length - 1) return
-    
-    const newIndex = historyIndex + 1
-    const img = new Image()
-    img.onload = () => {
-      context.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height)
-      context.drawImage(img, 0, 0)
-    }
-    img.src = history[newIndex]
-    setHistoryIndex(newIndex)
-    
+  const newIndex = historyIndex - 1
+  const img = new Image()
+  img.onload = () => {
+    context.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height)
+    context.drawImage(img, 0, 0)
     if (socket) socket.emit("undo", history[newIndex])
   }
+  img.src = history[newIndex]
+  setHistoryIndex(newIndex)
+}
+
+const redo = () => {
+  if (historyIndex >= history.length - 1) return
+
+  const newIndex = historyIndex + 1
+  const img = new Image()
+  img.onload = () => {
+    context.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height)
+    context.drawImage(img, 0, 0)
+    if (socket) socket.emit("undo", history[newIndex])
+  }
+  img.src = history[newIndex]
+  setHistoryIndex(newIndex)
+}
+
 
   const clearCanvas = () => {
     context.clearRect(0, 0, canvasRef.current.width, canvasRef.current.height)

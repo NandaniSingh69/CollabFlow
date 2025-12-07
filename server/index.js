@@ -31,9 +31,10 @@ mongoose
   .then(() => console.log("MongoDB connected"))
   .catch((err) => console.error("Mongo error:", err.message))
 
-// Store canvas state and online users per room
+// Store canvas state, online users, and lock state per room
 const roomCanvasState = new Map()
 const roomUsers = new Map() // roomCode -> Map(socketId -> { userName, color })
+const roomLocks = new Map() // roomCode -> boolean (true = locked)
 
 // Generate random color for user cursor
 const getRandomColor = () => {
@@ -73,6 +74,10 @@ io.on("connection", (socket) => {
     const users = Array.from(roomUsers.get(roomCode).values())
     socket.emit("users-in-room", users)
 
+    // Send current lock state to new joiner
+    const locked = roomLocks.get(roomCode) || false
+    socket.emit("lock-changed", { locked })
+
     // Notify others about new user
     socket.to(roomCode).emit("user-joined", {
       id: socket.id,
@@ -81,7 +86,7 @@ io.on("connection", (socket) => {
     })
   })
 
-  // Cursor movement - throttled on client, broadcast to room
+  // Cursor movement
   socket.on("cursor-move", ({ x, y }) => {
     if (socket.roomCode) {
       socket.to(socket.roomCode).emit("cursor-move", {
@@ -121,12 +126,19 @@ io.on("connection", (socket) => {
     }
   })
 
-  // Undo
+  // Undo/Redo sync
   socket.on("undo", (dataUrl) => {
     if (socket.roomCode) {
       roomCanvasState.set(socket.roomCode, dataUrl)
       socket.to(socket.roomCode).emit("canvas-state", dataUrl)
     }
+  })
+
+  // Lock/unlock drawing (host control)
+  socket.on("set-lock", ({ locked }) => {
+    if (!socket.roomCode) return
+    roomLocks.set(socket.roomCode, locked)
+    io.to(socket.roomCode).emit("lock-changed", { locked })
   })
 
   // Disconnect
@@ -137,6 +149,9 @@ io.on("connection", (socket) => {
         roomUsers.get(socket.roomCode).delete(socket.id)
         if (roomUsers.get(socket.roomCode).size === 0) {
           roomUsers.delete(socket.roomCode)
+          // Optional: clean up room state when empty
+          roomCanvasState.delete(socket.roomCode)
+          roomLocks.delete(socket.roomCode)
         }
       }
 
