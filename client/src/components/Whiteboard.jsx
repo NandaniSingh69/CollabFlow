@@ -342,11 +342,7 @@ const redo = () => {
   </div>
 
   {/* ADD THIS - Right side mode badge */}
-  {roomType && (
-    <div className="text-xs font-medium text-gray-500 bg-gray-100 px-3 py-1.5 rounded-full">
-      {roomType === "professional" ? "📋 Professional Mode" : "🎮 Fun Mode"}
-    </div>
-  )}
+  
 </div>
 
 
