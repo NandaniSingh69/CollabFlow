@@ -52,23 +52,27 @@ export default function App() {
   }
 
   const joinRoom = async () => {
-    if (!name.trim() || !roomCode.trim()) {
-      return toast({ variant: "destructive", title: "Missing info", description: "Enter name and room code." })
-    }
-
-    setLoading(true)
-
-    try {
-      const room = await joinRoomAPI({ code: roomCode.trim(), name: name.trim() })
-      await navigator.clipboard.writeText(roomCode)
-      toast({ title: "Joined!", description: `Room ${roomCode} joined.` })
-      navigate(`/room/${roomCode}?name=${encodeURIComponent(name)}&type=${room.type}`)
-    } catch (err) {
-      toast({ variant: "destructive", title: "Error", description: err.message })
-    } finally {
-      setLoading(false)
-    }
+  if (!name.trim() || !roomCode.trim()) {
+    return toast({ variant: "destructive", title: "Missing info", description: "Enter name and room code." })
   }
+
+  setLoading(true)
+
+  try {
+    const room = await joinRoomAPI({ code: roomCode.trim(), name: name.trim() })
+    await navigator.clipboard.writeText(roomCode)
+    toast({ title: "Joined!", description: `Room ${roomCode} joined.` })
+    
+    // ✅ FIX: Handle both 'type' and 'roomType' from API response
+    const roomTypeValue = room.type || room.roomType || 'professional'
+    navigate(`/room/${roomCode}?name=${encodeURIComponent(name)}&type=${roomTypeValue}&host=false`)
+  } catch (err) {
+    toast({ variant: "destructive", title: "Error", description: err.message })
+  } finally {
+    setLoading(false)
+  }
+}
+
 
   return (
     <div className="w-full min-h-screen bg-gradient-to-br from-background via-[#FFF7ED] to-[#F3E8FF] flex flex-col">
