@@ -7,12 +7,20 @@ export function SocketProvider({ children }) {
   const [socket, setSocket] = useState(null)
 
   useEffect(() => {
-    const newSocket = io("http://localhost:4000", {
-      withCredentials: true
+    // Use environment variable for API URL, fallback to localhost
+    const SOCKET_URL = import.meta.env.VITE_SOCKET_URL || "http://localhost:4000"
+    
+    const newSocket = io(SOCKET_URL, {
+      withCredentials: true,
+      transports: ["websocket", "polling"] // Helps with deployment
     })
 
     newSocket.on("connect", () => {
       console.log("Socket connected:", newSocket.id)
+    })
+
+    newSocket.on("connect_error", (error) => {
+      console.error("Socket connection error:", error)
     })
 
     setSocket(newSocket)
