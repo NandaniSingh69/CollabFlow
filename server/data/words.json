@@ -1,0 +1,14 @@
+{
+  "easy": [
+    "cat", "dog", "house", "tree", "car", "sun", "moon", "star", "fish", "bird",
+    "book", "phone", "apple", "pizza", "cake", "chair", "table", "door", "window", "lamp",
+    "shoe", "hat", "pen", "cup", "clock", "key", "ball", "flower", "cloud", "rainbow",
+    "heart", "smile", "hand", "eye", "ear", "nose", "mouth", "foot", "arm", "leg",
+    "bed", "sofa", "tv", "computer", "mouse", "keyboard", "bottle", "glass", "spoon", "fork",
+    "knife", "plate", "bowl", "banana", "orange", "grape", "strawberry", "watermelon", "carrot", "tomato",
+    "bread", "cheese", "egg", "milk", "water", "coffee", "tea", "juice", "ice cream", "candy",
+    "cookie", "donut", "hamburger", "hotdog", "sandwich", "salad", "soup", "chicken", "beef", "pork",
+    "rice", "pasta", "noodle", "potato", "onion", "pepper", "salt", "sugar", "honey", "butter",
+    "shirt", "pants", "dress", "skirt", "jacket", "coat", "scarf", "gloves", "socks", "boots"
+  ]
+}
