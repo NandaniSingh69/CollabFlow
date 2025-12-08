@@ -85,8 +85,7 @@ Visit `http://localhost:5173` to see the app running locally.
 ## 📸 Screenshots
 
 ### Home Page
-![alt text](client\src\assets\images\image-1.png)
-
+![alt text](https://github.com/NandaniSingh69/CollabFlow/blob/main/client/src/assets/images/image-1.png)
 
 ### Professional Mode
 ![alt text](client\src\assets\images\image-2.png)
