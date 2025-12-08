@@ -85,13 +85,14 @@ Visit `http://localhost:5173` to see the app running locally.
 ## 📸 Screenshots
 
 ### Home Page
-![alt text](image-1.png)
+![alt text](client\src\assets\images\image-1.png)
+
 
 ### Professional Mode
-![alt text](image-2.png)
+![alt text](client\src\assets\images\image-2.png)
 
 ### Fun Mode (Game)
-![alt text](image-3.png)
+![alt text](client\src\assets\images\image-3.png)
 
 
 ## 👤 Author
