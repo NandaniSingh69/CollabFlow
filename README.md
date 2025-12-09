@@ -53,34 +53,38 @@ Real-time collaborative whiteboard with drawing game mode. Perfect for teaching,
 - Node.js 18+ installed
 - MongoDB Atlas account (or local MongoDB)
 
+### Clone Repository
+git clone https://github.com/NandaniSingh69/CollabFlow.git
+cd CollabFlow
+
+text
+
+### Setup Backend
+cd server
+npm install
+
+Create .env file
+echo "MONGO_URI=your_mongodb_connection_string" > .env
+echo "PORT=4000" >> .env
+echo "NODE_ENV=development" >> .env
+echo "CLIENT_URL=http://localhost:5173" >> .env
+
+Start server
+npm run dev
+
+text
+
+### Setup Frontend
+cd ../client
+npm install
+
+Start development server
+npm run dev
+
+text
 
 Visit `http://localhost:5173` to see the app running locally.
 
-## 🎯 Usage
-
-### Create a Room
-1. Enter your display name
-2. Choose room type (Professional or Fun)
-3. Click "Create Room"
-4. Share the room code with others
-
-### Join a Room
-1. Enter your display name
-2. Enter the room code
-3. Click "Join Room"
-
-### Professional Mode
-- Draw freely on the canvas
-- Host can lock/unlock drawing for participants
-- Export your canvas as PNG
-- Chat with participants in real-time
-
-### Fun Mode (Game)
-- Host starts the game
-- One person draws while others guess
-- Type your guess in chat
-- Correct guesses earn points
-- Drawer rotates automatically each round
 
 ## 📸 Screenshots
 
