@@ -57,7 +57,6 @@ Real-time collaborative whiteboard with drawing game mode. Perfect for teaching,
 git clone https://github.com/NandaniSingh69/CollabFlow.git
 cd CollabFlow
 
-text
 
 ### Setup Backend
 cd server
@@ -72,7 +71,6 @@ echo "CLIENT_URL=http://localhost:5173" >> .env
 Start server
 npm run dev
 
-text
 
 ### Setup Frontend
 cd ../client
@@ -80,8 +78,6 @@ npm install
 
 Start development server
 npm run dev
-
-text
 
 Visit `http://localhost:5173` to see the app running locally.
 
